@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>ESP32-CAM Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0b0c10;
+    --surface: #12141a;
+    --surface2: #1c1f2a;
+    --border: rgba(255,255,255,0.07);
+    --border-hi: rgba(255,255,255,0.15);
+    --accent: #00e5ff;
+    --accent-dim: rgba(0,229,255,0.12);
+    --accent-glow: rgba(0,229,255,0.35);
+    --danger: #ff4d6d;
+    --danger-dim: rgba(255,77,109,0.15);
+    --success: #00c896;
+    --warn: #ffb300;
+    --text: #e8eaf0;
+    --muted: #5a5f72;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', system-ui, sans-serif;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    overflow-x: hidden;
+  }
+
+  /* ── GRID SCANLINE BACKGROUND ── */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(11,12,16,0.9);
+    backdrop-filter: blur(12px);
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(0,229,255,0.3);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+  }
+
+  .logo-label { color: var(--text); }
+  .logo-label span { color: var(--accent); }
+
+  /* Status pill */
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border-hi);
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    user-select: none;
+    position: relative;
+  }
+
+  .status-pill:hover { border-color: rgba(0,229,255,0.4); background: rgba(0,229,255,0.05); }
+
+  .status-pill.connected { border-color: rgba(0,200,150,0.4); }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    flex-shrink: 0;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+
+  .dot.live {
+    background: var(--success);
+    box-shadow: 0 0 0 3px rgba(0,200,150,0.25);
+    animation: throb 2s ease-in-out infinite;
+  }
+
+  @keyframes throb {
+    0%,100% { box-shadow: 0 0 0 3px rgba(0,200,150,0.25); }
+    50%      { box-shadow: 0 0 0 5px rgba(0,200,150,0.1); }
+  }
+
+  #statusText { color: var(--text); }
+
+  /* IP modal */
+  .ip-modal-bg {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ip-modal-bg.open { display: flex; }
+
+  .ip-modal {
+    background: var(--surface);
+    border: 1px solid var(--border-hi);
+    border-radius: 16px;
+    padding: 28px;
+    width: min(340px, 90vw);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .ip-modal h2 {
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+  }
+
+  .ip-modal label { font-size: 0.82rem; color: var(--muted); }
+
+  .ip-modal input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border-hi);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .ip-modal input:focus { border-color: rgba(0,229,255,0.5); }
+
+  .ip-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  .btn-ghost {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border-hi);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-primary {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: #000;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .btn-primary:hover { opacity: 0.85; }
+
+  /* ── MAIN LAYOUT ── */
+  main {
+    position: relative;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 0;
+    max-height: calc(100vh - 57px - 44px);
+  }
+
+  /* ── VIDEO PANEL ── */
+  .video-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: #000;
+    overflow: hidden;
+  }
+
+  .video-wrap {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #videoStream {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    background: #000;
+  }
+
+  /* Corner overlays */
+  .corner {
+    position: absolute;
+    width: 20px; height: 20px;
+    border-color: var(--accent);
+    border-style: solid;
+    opacity: 0.5;
+  }
+
+  .corner.tl { top: 12px; left: 12px; border-width: 2px 0 0 2px; }
+  .corner.tr { top: 12px; right: 12px; border-width: 2px 2px 0 0; }
+  .corner.bl { bottom: 12px; left: 12px; border-width: 0 0 2px 2px; }
+  .corner.br { bottom: 12px; right: 12px; border-width: 0 2px 2px 0; }
+
+  .video-hud {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 10px 16px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.85));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.45);
+    letter-spacing: 0.06em;
+  }
+
+  .hud-live {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--danger);
+  }
+
+  .hud-live-dot {
+    width: 7px; height: 7px;
+    background: var(--danger);
+    border-radius: 50%;
+    animation: blink 1.4s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+
+  #fpsCounter { transition: color 0.3s; }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-hi) transparent;
+  }
+
+  .panel {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-title::before {
+    content: "";
+    display: block;
+    width: 3px;
+    height: 12px;
+    background: var(--accent);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ── D-PAD ── */
+  .dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 60px);
+    grid-template-rows: repeat(3, 60px);
+    gap: 8px;
+    margin: 0 auto;
+    width: fit-content;
+  }
+
+  .dpad-btn {
+    width: 60px; height: 60px;
+    background: var(--surface2);
+    border: 1px solid var(--border-hi);
+    border-radius: 12px;
+    color: var(--text);
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    transition: background 0.1s, border-color 0.1s, transform 0.1s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .dpad-btn:hover { background: rgba(0,229,255,0.07); border-color: rgba(0,229,255,0.25); }
+
+  .dpad-btn.pressed {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+    transform: scale(0.95);
+  }
+
+  .dpad-btn.stop-btn {
+    background: rgba(255,77,109,0.08);
+    border-color: rgba(255,77,109,0.25);
+  }
+
+  .dpad-btn.stop-btn:hover { background: rgba(255,77,109,0.15); border-color: rgba(255,77,109,0.5); }
+  .dpad-btn.stop-btn.pressed { background: var(--danger-dim); border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+
+  .phantom { visibility: hidden; pointer-events: none; }
+
+  /* Speed slider */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .slider-label {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    width: 46px;
+    flex-shrink: 0;
+  }
+
+  input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border-hi);
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+  .slider-val {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--accent);
+    width: 32px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* ── MODE BUTTONS ── */
+  .mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .mode-btn {
+    padding: 14px 12px;
+    border-radius: 12px;
+    border: 1px solid;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s, border-color 0.2s, transform 0.1s, box-shadow 0.2s;
+    line-height: 1.4;
+    text-align: center;
+  }
+
+  .mode-btn:active { transform: scale(0.97); }
+
+  .mode-btn .mode-icon { font-size: 1.4rem; }
+
+  .mode-btn.auto-btn {
+    background: var(--accent-dim);
+    border-color: rgba(0,229,255,0.3);
+    color: var(--accent);
+  }
+
+  .mode-btn.auto-btn:hover {
+    background: rgba(0,229,255,0.18);
+    border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(0,229,255,0.15);
+  }
+
+  .mode-btn.auto-btn.active-mode {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    box-shadow: 0 0 24px var(--accent-glow);
+  }
+
+  .mode-btn.manual-btn {
+    background: rgba(255,179,0,0.07);
+    border-color: rgba(255,179,0,0.25);
+    color: var(--warn);
+  }
+
+  .mode-btn.manual-btn:hover {
+    background: rgba(255,179,0,0.15);
+    border-color: var(--warn);
+    box-shadow: 0 0 20px rgba(255,179,0,0.15);
+  }
+
+  .mode-btn.manual-btn.active-mode {
+    background: var(--warn);
+    color: #000;
+    border-color: var(--warn);
+  }
+
+  /* ── CAM CONTROLS ── */
+  .cam-btns {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cam-btn {
+    flex: 1;
+    padding: 12px 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border-hi);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+
+  .cam-btn:hover { background: rgba(0,229,255,0.07); border-color: rgba(0,229,255,0.3); }
+  .cam-btn.pressed { background: var(--accent-dim); border-color: var(--accent); transform: scale(0.95); }
+
+  .cam-btn .cam-icon { font-size: 1.2rem; }
+
+  .cam-center {
+    flex: none;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    padding: 0;
+    font-size: 1rem;
+    align-self: center;
+  }
+
+  /* ── FOOTER / TOAST ── */
+  footer {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 24px;
+    background: rgba(11,12,16,0.9);
+    border-top: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .footer-left { display: flex; align-items: center; gap: 16px; }
+  .footer-right { display: flex; align-items: center; gap: 12px; }
+
+  #keyHint { font-size: 0.65rem; }
+  #keyHint kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface2);
+    border: 1px solid var(--border-hi);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--text);
+    margin: 0 2px;
+  }
+
+  /* ── TOASTS ── */
+  .toast-zone {
+    position: fixed;
+    bottom: 52px;
+    right: 16px;
+    z-index: 900;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border-hi);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: auto;
+    animation: toastIn 0.25s ease-out, toastOut 0.3s ease-in 2.7s forwards;
+    max-width: 280px;
+    backdrop-filter: blur(8px);
+  }
+
+  .toast.ok { border-left: 3px solid var(--success); }
+  .toast.err { border-left: 3px solid var(--danger); }
+  .toast.info { border-left: 3px solid var(--accent); }
+
+  @keyframes toastIn {
+    from { transform: translateX(110%); opacity: 0; }
+    to   { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes toastOut {
+    from { opacity: 1; transform: translateX(0); }
+    to   { opacity: 0; transform: translateX(110%); }
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 700px) {
+    main {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+      max-height: none;
+    }
+
+    .video-panel {
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      min-height: 200px;
+    }
+
+    .video-wrap { height: 56vw; }
+
+    .sidebar {
+      flex-direction: row;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
+    .panel {
+      min-width: 200px;
+      border-bottom: none;
+      border-right: 1px solid var(--border);
+    }
+
+    footer #keyHint { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    <div class="logo-label">ESP32<span>-CAM</span></div>
+  </div>
+
+  <div class="status-pill" id="statusPill" onclick="openIPModal()" title="Click to configure IP">
+    <div class="dot" id="dot"></div>
+    <span id="statusText">OFFLINE</span>
+    <span style="color:var(--muted);margin-left:4px">▸ <span id="ipLabel">192.168.1.100</span></span>
+  </div>
+</header>
+
+<!-- ── MAIN ── -->
+<main>
+
+  <!-- VIDEO PANEL -->
+  <div class="video-panel">
+    <div class="video-wrap">
+      <img id="videoStream" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Video stream"/>
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="video-hud">
+        <span id="fpsCounter">-- fps</span>
+        <span>640×480 MJPEG</span>
+        <div class="hud-live">
+          <div class="hud-live-dot"></div>
+          LIVE
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- Drive Controls -->
+    <div class="panel">
+      <div class="panel-title">Drive</div>
+
+      <div class="dpad" id="dpad">
+        <!-- Row 1 -->
+        <div class="phantom dpad-btn"></div>
+        <button class="dpad-btn" id="btn-forward" aria-label="Forward">▲</button>
+        <div class="phantom dpad-btn"></div>
+        <!-- Row 2 -->
+        <button class="dpad-btn" id="btn-left" aria-label="Left">◀</button>
+        <button class="dpad-btn stop-btn" id="btn-stop" aria-label="Stop">■</button>
+        <button class="dpad-btn" id="btn-right" aria-label="Right">▶</button>
+        <!-- Row 3 -->
+        <div class="phantom dpad-btn"></div>
+        <button class="dpad-btn" id="btn-backward" aria-label="Backward">▼</button>
+        <div class="phantom dpad-btn"></div>
+      </div>
+
+      <div class="slider-row">
+        <span class="slider-label">SPEED</span>
+        <input type="range" id="speedSlider" min="1" max="5" step="1" value="3" aria-label="Speed"/>
+        <span class="slider-val" id="speedVal">3</span>
+      </div>
+    </div>
+
+    <!-- Camera Pan -->
+    <div class="panel">
+      <div class="panel-title">Camera</div>
+      <div class="cam-btns">
+        <button class="cam-btn" id="btn-camleft" aria-label="Pan left">
+          <span class="cam-icon">◀</span>
+          <span>LEFT</span>
+        </button>
+        <button class="cam-btn cam-center" id="btn-camcenter" aria-label="Center camera">⏺</button>
+        <button class="cam-btn" id="btn-camright" aria-label="Pan right">
+          <span class="cam-icon">▶</span>
+          <span>RIGHT</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- System Modes -->
+    <div class="panel">
+      <div class="panel-title">Mode</div>
+      <div class="mode-grid">
+        <button class="mode-btn auto-btn" id="btn-auto" aria-label="Autonomous mode" onclick="setMode('auto')">
+          <span class="mode-icon">🤖</span>
+          AUTO
+        </button>
+        <button class="mode-btn manual-btn" id="btn-manual" aria-label="Manual mode" onclick="setMode('manual')">
+          <span class="mode-icon">🕹</span>
+          MANUAL
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+</main>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-left">
+    <span>ESP32-CAM EXPLORER v2.2</span>
+    <span id="reconnectInfo" style="color:var(--warn);display:none"></span>
+  </div>
+  <div class="footer-right">
+    <span id="keyHint">
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive &nbsp;|&nbsp;
+      <kbd>Space</kbd> stop &nbsp;|&nbsp;
+      <kbd>Q</kbd><kbd>E</kbd> cam pan
+    </span>
+  </div>
+</footer>
+
+<!-- ── IP MODAL ── -->
+<div class="ip-modal-bg" id="ipModalBg" onclick="handleModalBgClick(event)">
+  <div class="ip-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h2 id="modalTitle">// DEVICE CONFIG</h2>
+    <div>
+      <label for="ipInput">ESP32 IP Address</label>
+      <input type="text" id="ipInput" placeholder="192.168.1.100" autocomplete="off" spellcheck="false"/>
+    </div>
+    <div class="ip-modal-actions">
+      <button class="btn-ghost" onclick="closeIPModal()">Cancel</button>
+      <button class="btn-primary" onclick="applyIP()">Connect</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOASTS ── -->
+<div class="toast-zone" id="toastZone" aria-live="polite"></div>
+
+<script>
+/* ── CONFIG ── */
+let espIP = localStorage.getItem('esp32_ip') || '192.168.1.100';
+let ws = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECTS = 10;
+let reconnectTimer = null;
+
+/* ── STATE ── */
+let currentMode = null;
+let activeKeys = new Set();
+let frameCount = 0;
+let lastFrameTime = performance.now();
+let fpsInterval;
+let lastSentCmd = null; // debounce: avoid flooding same cmd
+let cmdThrottle = null;
+
+/* ── DOM ── */
+const dot = document.getElementById('dot');
+const statusText = document.getElementById('statusText');
+const ipLabel = document.getElementById('ipLabel');
+const statusPill = document.getElementById('statusPill');
+const videoStream = document.getElementById('videoStream');
+const fpsCounter = document.getElementById('fpsCounter');
+const speedSlider = document.getElementById('speedSlider');
+const speedVal = document.getElementById('speedVal');
+const reconnectInfo = document.getElementById('reconnectInfo');
+const toastZone = document.getElementById('toastZone');
+
+/* ── INIT ── */
+document.addEventListener('DOMContentLoaded', () => {
+  ipLabel.textContent = espIP;
+  document.getElementById('ipInput').value = espIP;
+  connectWS();
+  initDPad();
+  initCamBtns();
+  initSpeedSlider();
+  initKeyboard();
+
+  fpsInterval = setInterval(updateFPS, 1000);
+});
+
+/* ── WEBSOCKET ── */
+function connectWS() {
+  try {
+    ws = new WebSocket(`ws://${espIP}:86/`);
+    ws.binaryType = 'blob';
+
+    ws.onopen = () => {
+      dot.classList.add('live');
+      statusPill.classList.add('connected');
+      statusText.textContent = 'ONLINE';
+      reconnectAttempts = 0;
+      reconnectInfo.style.display = 'none';
+      toast('Connected to ' + espIP, 'ok');
+    };
+
+    ws.onmessage = (e) => {
+      if (!(e.data instanceof Blob)) return;
+      frameCount++;
+      const url = URL.createObjectURL(e.data);
+      const prev = videoStream.src;
+      videoStream.src = url;
+      videoStream.onload = () => {
+        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+      };
+    };
+
+    ws.onclose = () => {
+      dot.classList.remove('live');
+      statusPill.classList.remove('connected');
+      reconnect();
+    };
+
+    ws.onerror = () => {};
+
+  } catch (err) {
+    reconnect();
+  }
+}
+
+function reconnect() {
+  if (reconnectAttempts >= MAX_RECONNECTS) {
+    statusText.textContent = 'FAILED';
+    reconnectInfo.style.display = 'none';
+    toast('Could not reach device. Check IP & power.', 'err');
+    return;
+  }
+  reconnectAttempts++;
+  const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 12000);
+  statusText.textContent = 'RETRY ' + reconnectAttempts;
+  reconnectInfo.style.display = 'inline';
+  reconnectInfo.textContent = `retry ${reconnectAttempts}/${MAX_RECONNECTS}`;
+
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(connectWS, delay);
+}
+
+/* ── SEND ── */
+function send(cmd) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  // Throttle: skip if same cmd sent <80ms ago (for keydown repeat)
+  if (cmd === lastSentCmd && cmdThrottle) return;
+  lastSentCmd = cmd;
+  clearTimeout(cmdThrottle);
+  cmdThrottle = setTimeout(() => { lastSentCmd = null; }, 80);
+  ws.send(cmd);
+}
+
+/* ── D-PAD ── */
+const dpadMap = {
+  'btn-forward': 'forward',
+  'btn-backward': 'backward',
+  'btn-left': 'left',
+  'btn-right': 'right',
+  'btn-stop': 'stop',
+};
+
+function initDPad() {
+  Object.entries(dpadMap).forEach(([id, cmd]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const isStop = cmd === 'stop';
+
+    const press = () => {
+      btn.classList.add('pressed');
+      send(cmd);
+      if (!isStop) {
+        // keep sending while held (interval)
+        btn._holdInterval = setInterval(() => send(cmd), 120);
+      }
+    };
+
+    const release = () => {
+      btn.classList.remove('pressed');
+      clearInterval(btn._holdInterval);
+      if (!isStop) send('stop');
+    };
+
+    btn.addEventListener('mousedown', press);
+    btn.addEventListener('mouseup', release);
+    btn.addEventListener('mouseleave', release);
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); press(); }, { passive: false });
+    btn.addEventListener('touchend', (e) => { e.preventDefault(); release(); }, { passive: false });
+    btn.addEventListener('touchcancel', release);
+  });
+}
+
+/* ── CAM BUTTONS ── */
+const camMap = {
+  'btn-camleft':   { down: 'camleft',   up: 'camstill' },
+  'btn-camright':  { down: 'camright',  up: 'camstill' },
+  'btn-camcenter': { tap: 'camcenter' },
+};
+
+function initCamBtns() {
+  Object.entries(camMap).forEach(([id, cfg]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+
+    if (cfg.tap) {
+      btn.addEventListener('click', () => { send(cfg.tap); toast('Camera centered', 'info'); });
+      return;
+    }
+
+    const press = () => { btn.classList.add('pressed'); send(cfg.down); };
+    const release = () => { btn.classList.remove('pressed'); send(cfg.up); };
+
+    btn.addEventListener('mousedown', press);
+    btn.addEventListener('mouseup', release);
+    btn.addEventListener('mouseleave', release);
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); press(); }, { passive: false });
+    btn.addEventListener('touchend', (e) => { e.preventDefault(); release(); }, { passive: false });
+    btn.addEventListener('touchcancel', release);
+  });
+}
+
+/* ── SPEED SLIDER ── */
+function initSpeedSlider() {
+  speedSlider.addEventListener('input', () => {
+    speedVal.textContent = speedSlider.value;
+    send('speed:' + speedSlider.value);
+  });
+}
+
+/* ── MODE ── */
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('btn-auto').classList.toggle('active-mode', mode === 'auto');
+  document.getElementById('btn-manual').classList.toggle('active-mode', mode === 'manual');
+  send(mode);
+  toast(mode === 'auto' ? 'Autonomous mode active' : 'Manual override engaged',
+        mode === 'auto' ? 'ok' : 'info');
+}
+
+/* ── KEYBOARD ── */
+const keyCmd = {
+  ArrowUp: 'forward', w: 'forward', W: 'forward',
+  ArrowDown: 'backward', s: 'backward', S: 'backward',
+  ArrowLeft: 'left', a: 'left', A: 'left',
+  ArrowRight: 'right', d: 'right', D: 'right',
+  ' ': 'stop',
+  q: 'camleft', Q: 'camleft',
+  e: 'camright', E: 'camright',
+  c: 'camcenter', C: 'camcenter',
+};
+
+const moveKeys = new Set(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','W','A','S','D']);
+const camKeys = new Set(['q','e','Q','E']);
+
+function initKeyboard() {
+  document.addEventListener('keydown', (ev) => {
+    if (document.activeElement.tagName === 'INPUT') return;
+    const cmd = keyCmd[ev.key];
+    if (!cmd) return;
+    ev.preventDefault();
+    if (activeKeys.has(ev.key)) return; // already held
+    activeKeys.add(ev.key);
+    send(cmd);
+
+    // Highlight corresponding button
+    const btnId = btnForKey(ev.key);
+    if (btnId) document.getElementById(btnId)?.classList.add('pressed');
+  });
+
+  document.addEventListener('keyup', (ev) => {
+    if (!activeKeys.has(ev.key)) return;
+    activeKeys.delete(ev.key);
+
+    const btnId = btnForKey(ev.key);
+    if (btnId) document.getElementById(btnId)?.classList.remove('pressed');
+
+    if (moveKeys.has(ev.key)) {
+      // only stop if no other move keys held
+      const stillMoving = [...activeKeys].some(k => moveKeys.has(k));
+      if (!stillMoving) send('stop');
+    }
+    if (camKeys.has(ev.key)) send('camstill');
+  });
+}
+
+function btnForKey(k) {
+  if (k === 'ArrowUp'    || k === 'w' || k === 'W') return 'btn-forward';
+  if (k === 'ArrowDown'  || k === 's' || k === 'S') return 'btn-backward';
+  if (k === 'ArrowLeft'  || k === 'a' || k === 'A') return 'btn-left';
+  if (k === 'ArrowRight' || k === 'd' || k === 'D') return 'btn-right';
+  if (k === ' ')                                      return 'btn-stop';
+  if (k === 'q' || k === 'Q')                        return 'btn-camleft';
+  if (k === 'e' || k === 'E')                        return 'btn-camright';
+  return null;
+}
+
+/* ── FPS COUNTER ── */
+function updateFPS() {
+  const now = performance.now();
+  const elapsed = (now - lastFrameTime) / 1000;
+  const fps = Math.round(frameCount / elapsed);
+  fpsCounter.textContent = `${fps} fps`;
+  fpsCounter.style.color = fps < 5 ? 'var(--danger)' : fps < 15 ? 'var(--warn)' : 'rgba(255,255,255,0.45)';
+  frameCount = 0;
+  lastFrameTime = now;
+}
+
+/* ── IP MODAL ── */
+function openIPModal() {
+  document.getElementById('ipInput').value = espIP;
+  document.getElementById('ipModalBg').classList.add('open');
+  setTimeout(() => document.getElementById('ipInput').focus(), 50);
+}
+
+function closeIPModal() {
+  document.getElementById('ipModalBg').classList.remove('open');
+}
+
+function handleModalBgClick(e) {
+  if (e.target === document.getElementById('ipModalBg')) closeIPModal();
+}
+
+function applyIP() {
+  const val = document.getElementById('ipInput').value.trim();
+  if (!val) return;
+  espIP = val;
+  localStorage.setItem('esp32_ip', espIP);
+  ipLabel.textContent = espIP;
+  closeIPModal();
+  reconnectAttempts = 0;
+  if (ws) ws.close();
+  connectWS();
+  toast('Connecting to ' + espIP + '…', 'info');
+}
+
+document.getElementById('ipInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') applyIP();
+  if (e.key === 'Escape') closeIPModal();
+});
+
+/* ── TOAST ── */
+let toastQueue = 0;
+function toast(msg, type = 'info') {
+  if (toastQueue >= 3) return; // suppress spam
+  toastQueue++;
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  toastZone.appendChild(el);
+  setTimeout(() => {
+    el.remove();
+    toastQueue = Math.max(0, toastQueue - 1);
+  }, 3000);
+}
+
+/* ── MISC ── */
+document.querySelectorAll('button').forEach(b => {
+  b.addEventListener('contextmenu', e => e.preventDefault());
+});
+</script>
+</body>
+</html>
