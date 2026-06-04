@@ -325,9 +325,6 @@
   .toast.ok { border-left: 3px solid var(--success); }
   .toast.info { border-left: 3px solid var(--accent); }
 
-  @keyframes toastIn { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  @keyframes toastOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(110%); } }
-
   @media (max-width: 700px) {
     main { grid-template-columns: 1fr; grid-template-rows: 240px 1fr; max-height: none; }
     .console-panel { border-right: none; border-bottom: 1px solid var(--border); }
@@ -409,7 +406,7 @@
 </main>
 
 <footer>
-  <div>MQTT BROKER: public.hivemq.com (WebSockets Port 443)</div>
+  <div>MQTT BROKER: broker.emqx.io (WebSockets Port 8084)</div>
   <div id="keyHint">
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive &nbsp;|&nbsp;
     <kbd>Space</kbd> stop &nbsp;|&nbsp;
@@ -420,9 +417,9 @@
 <div class="toast-zone" id="toastZone"></div>
 
 <script>
-/* ── MQTT CONFIGURATION ── */
-const brokerHost = "broker.hivemq.com";
-const brokerPort = 443;
+/* ── MQTT EMQX ROUTING CONFIGURATION ── */
+const brokerHost = "broker.emqx.io";
+const brokerPort = 8084; // Correct secure WebSockets port for EMQX
 const clientID = "web_dashboard_" + Math.random().toString(16).substring(2, 10);
 
 const topicCmd = "robot/explorer/cmd";
@@ -450,7 +447,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initMQTT() {
-  mqttClient = new Paho.MQTT.Client(brokerHost, Number(brokerPort), "/mqtt", clientID);
+  // Correct single-slash root path prevents 404 resource errors
+  mqttClient = new Paho.MQTT.Client(brokerHost, Number(brokerPort), "/", clientID);
   
   mqttClient.onConnectionLost = (responseObject) => {
     dot.classList.remove('live');
@@ -467,10 +465,11 @@ function initMQTT() {
 
   const options = {
     useSSL: true,
+    timeout: 3,
     onSuccess: () => {
       dot.classList.add('live');
       statusText.textContent = "ONLINE";
-      logMsg("SYSTEM", "Connected to HiveMQ Broker successfully.");
+      logMsg("SYSTEM", "Connected to EMQX Broker successfully.");
       mqttClient.subscribe(topicStatus);
       toast("Connected to Dashboard Grid", "ok");
     },
@@ -501,7 +500,7 @@ function logMsg(sender, text, isError = false) {
   consoleLog.scrollTop = consoleLog.scrollHeight;
 }
 
-/* ── INTERFACE CORRECTIONS ── */
+/* ── INTERFACE & SIGNAL PROCESSING ── */
 const dpadMap = { 'btn-forward': 'forward', 'btn-backward': 'backward', 'btn-left': 'left', 'btn-right': 'right', 'btn-stop': 'stop' };
 function initDPad() {
   Object.entries(dpadMap).forEach(([id, cmd]) => {
