@@ -419,7 +419,7 @@
 <script>
 /* ── MQTT EMQX ROUTING CONFIGURATION ── */
 const brokerHost = "broker.emqx.io";
-const brokerPort = 8084; // Correct secure WebSockets port for EMQX
+const brokerPort = 8084; 
 const clientID = "web_dashboard_" + Math.random().toString(16).substring(2, 10);
 
 const topicCmd = "robot/explorer/cmd";
@@ -447,8 +447,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initMQTT() {
-  // Correct single-slash root path prevents 404 resource errors
-  mqttClient = new Paho.MQTT.Client(brokerHost, Number(brokerPort), "/", clientID);
+  // FIXED: Explicit /mqtt path parameter connects flawlessly to the gateway structure
+  mqttClient = new Paho.MQTT.Client(brokerHost, Number(brokerPort), "/mqtt", clientID);
   
   mqttClient.onConnectionLost = (responseObject) => {
     dot.classList.remove('live');
@@ -465,7 +465,9 @@ function initMQTT() {
 
   const options = {
     useSSL: true,
-    timeout: 3,
+    timeout: 10,                 // Elevated handshaking threshold
+    mqttVersion: 4,              // Standardizes connection over framed web channels
+    cleanSession: true,
     onSuccess: () => {
       dot.classList.add('live');
       statusText.textContent = "ONLINE";
