@@ -129,7 +129,6 @@
     max-height: calc(100vh - 57px - 44px);
   }
 
-  /* TELEMETRY CONSOLE PANEL */
   .console-panel {
     padding: 24px;
     display: flex;
@@ -190,7 +189,6 @@
     border-radius: 2px;
   }
 
-  /* D-PAD */
   .dpad {
     display: grid;
     grid-template-columns: repeat(3, 60px);
@@ -268,7 +266,6 @@
     text-align: right;
   }
 
-  /* MODE BUTTONS */
   .mode-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -298,7 +295,6 @@
   .mode-btn.manual-btn { background: rgba(255,179,0,0.07); border-color: rgba(255,179,0,0.25); color: var(--warn); }
   .mode-btn.manual-btn.active-mode { background: var(--warn); color: #000; border-color: var(--warn); }
 
-  /* CAM CONTROLS */
   .cam-btns { display: flex; gap: 8px; justify-content: center; }
   .cam-btn {
     flex: 1; padding: 12px 8px; background: var(--surface2); border: 1px solid var(--border-hi);
@@ -426,7 +422,7 @@
 <script>
 /* ── MQTT CONFIGURATION ── */
 const brokerHost = "broker.hivemq.com";
-const brokerPort = 443; // Secure WebSockets port
+const brokerPort = 443;
 const clientID = "web_dashboard_" + Math.random().toString(16).substring(2, 10);
 
 const topicCmd = "robot/explorer/cmd";
@@ -505,7 +501,7 @@ function logMsg(sender, text, isError = false) {
   consoleLog.scrollTop = consoleLog.scrollHeight;
 }
 
-/* ── INTERFACE AND KEYBOARD ASSIGNMENTS ── */
+/* ── INTERFACE CORRECTIONS ── */
 const dpadMap = { 'btn-forward': 'forward', 'btn-backward': 'backward', 'btn-left': 'left', 'btn-right': 'right', 'btn-stop': 'stop' };
 function initDPad() {
   Object.entries(dpadMap).forEach(([id, cmd]) => {
@@ -513,14 +509,28 @@ function initDPad() {
     if (!btn) return;
     const isStop = cmd === 'stop';
 
-    const press = () => { btn.classList.add('pressed'); sendCmd(cmd); if(!isStop) btn._interval = setInterval(() => sendCmd(cmd), 120); };
-    const release = () => { btn.classList.remove('pressed'); clearInterval(btn._interval); if(!isStop) sendCmd('stop'); };
+    const press = () => { 
+      if (btn._interval) return; 
+      btn.classList.add('pressed'); 
+      sendCmd(cmd); 
+      if(!isStop) btn._interval = setInterval(() => sendCmd(cmd), 120); 
+    };
+
+    const release = () => { 
+      btn.classList.remove('pressed'); 
+      if (btn._interval) {
+        clearInterval(btn._interval);
+        btn._interval = null;
+      }
+      if(!isStop) sendCmd('stop'); 
+    };
 
     btn.addEventListener('mousedown', press);
     btn.addEventListener('mouseup', release);
     btn.addEventListener('mouseleave', release);
     btn.addEventListener('touchstart', (e) => { e.preventDefault(); press(); }, { passive: false });
     btn.addEventListener('touchend', (e) => { e.preventDefault(); release(); }, { passive: false });
+    btn.addEventListener('touchcancel', release);
   });
 }
 
